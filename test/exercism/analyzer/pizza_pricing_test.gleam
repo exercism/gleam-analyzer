@@ -1,8 +1,9 @@
 import gleeunit/should
 import glance
 import exercism/analyzer/pizza_pricing
+import exercism/analyzer/comment.{Actionable, Comment}
 
-fn lint(src: String) -> List(pizza_pricing.Comment) {
+fn lint(src: String) -> List(Comment) {
   let assert Ok(module) = glance.module(src)
   module
   |> pizza_pricing.lint
@@ -16,10 +17,10 @@ pub fn nothing_test() {
 pub fn import_used_test() {
   lint("import wibble")
   |> should.equal([
-    pizza_pricing.Comment(
+    Comment(
       comment: "gleam.pizza_pricing.imports_used",
       params: [],
-      type_: pizza_pricing.Actionable,
+      type_: Actionable,
     ),
   ])
 }
@@ -51,15 +52,15 @@ pub fn order_price(order: List(Pizza)) -> Int {
   "
   |> lint
   |> should.equal([
-    pizza_pricing.Comment(
+    Comment(
       comment: "gleam.pizza_pricing.imports_used",
       params: [],
-      type_: pizza_pricing.Actionable,
+      type_: Actionable,
     ),
-    pizza_pricing.Comment(
+    Comment(
       comment: "gleam.pizza_pricing.list_length_used",
       params: [],
-      type_: pizza_pricing.Actionable,
+      type_: Actionable,
     ),
   ])
 }
