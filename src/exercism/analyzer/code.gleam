@@ -6,6 +6,22 @@ import glance.{
 import gleam/list
 import gleam/option.{None, Some}
 
+pub fn get_function(
+  module: glance.Module,
+  desired_name: String,
+) -> Result(glance.Function, String) {
+  case module.functions {
+    [] -> Error("No functions found")
+    [glance.Definition(definition: function, ..), ..] -> {
+      case function.name == desired_name {
+        True -> Ok(function)
+        False -> get_function(module, desired_name)
+      }
+    }
+    [_, ..] -> get_function(module, desired_name)
+  }
+}
+
 pub type Visitor(state) {
   Visitor(
     visit_expression: fn(state, Expression) -> state,

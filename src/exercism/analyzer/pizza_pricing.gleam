@@ -7,6 +7,7 @@
 /// 
 import glance.{Call, Expression, FieldAccess, Variable}
 import gleam/list
+import gleam/bool
 import exercism/analyzer/code.{Visitor}
 import exercism/analyzer/comment.{Actionable, Comment}
 
@@ -33,7 +34,10 @@ type LengthCheckState {
 
 /// Checks that list.length is not used for the special cases of 1 or 2 pizzas in `order_price`.
 fn check_list_length_not_used(module: glance.Module) -> List(Comment) {
-  use function <- require(find_function(module, "order_price"))
+  let state = LengthCheckState(used: False)
+  let state = list.fold(module.imports, state, check_list_length_not_imported)
+
+  use function <- require(code.get_function(module, "order_price"))
 
   let visitor =
     Visitor(
@@ -41,12 +45,25 @@ fn check_list_length_not_used(module: glance.Module) -> List(Comment) {
       visit_expression: check_if_call_to_list_length,
     )
 
-  let state = LengthCheckState(used: False)
   let state = code.fold_statements(function.body, state, visitor)
 
   case state.used {
     True -> [Comment(comment_prefix <> "list_length_used", [], Actionable)]
     False -> []
+  }
+}
+
+fn check_list_length_not_imported(
+  state: LengthCheckState,
+  import_: glance.Definition(glance.Import),
+) -> LengthCheckState {
+  let import_ = import_.definition
+  use <- bool.guard(import_.module != "gleam/list", state)
+
+  let is_list_length = fn(x: glance.UnqualifiedImport) { x.name == "length" }
+  case list.any(import_.unqualified, is_list_length) {
+    True -> LengthCheckState(used: True)
+    False -> state
   }
 }
 
@@ -59,22 +76,6 @@ fn check_if_call_to_list_length(
       LengthCheckState(used: True)
     }
     _ -> state
-  }
-}
-
-fn find_function(
-  module: glance.Module,
-  desired_name: String,
-) -> Result(glance.Function, String) {
-  case module.functions {
-    [] -> Error("No functions found")
-    [glance.Definition(definition: function, ..), ..] -> {
-      case function.name == desired_name {
-        True -> Ok(function)
-        False -> find_function(module, desired_name)
-      }
-    }
-    [_, ..] -> find_function(module, desired_name)
   }
 }
 
