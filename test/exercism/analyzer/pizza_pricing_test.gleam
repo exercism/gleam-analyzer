@@ -90,5 +90,55 @@ pub fn order_price(order: List(Pizza)) -> Int {
     ),
   ])
 }
-// TODO: test that we catch the use of list.length even when aliasing the module
-// TODO: test that we catch the use of list.length even when aliasing the unqualied function
+
+pub fn unqualified_aliased_length_used_for_order_price_test() {
+  "import gleam/list.{length as len}
+
+pub fn order_price(order: List(Pizza)) -> Int {
+  case len(order) {
+    1 -> todo
+    2 -> todo
+    _ -> count_order_price(order, 0)
+  }
+}
+  "
+  |> lint
+  |> should.equal([
+    Comment(
+      comment: "gleam.pizza_pricing.imports_used",
+      params: [],
+      type_: Actionable,
+    ),
+    Comment(
+      comment: "gleam.pizza_pricing.list_length_used",
+      params: [],
+      type_: Actionable,
+    ),
+  ])
+}
+
+pub fn aliased_length_used_for_order_price_test() {
+  "import gleam/list as lizzy
+
+pub fn order_price(order: List(Pizza)) -> Int {
+  case lizzy.length(order) {
+    1 -> todo
+    2 -> todo
+    _ -> count_order_price(order, 0)
+  }
+}
+  "
+  |> lint
+  |> should.equal([
+    Comment(
+      comment: "gleam.pizza_pricing.imports_used",
+      params: [],
+      type_: Actionable,
+    ),
+    Comment(
+      comment: "gleam.pizza_pricing.list_length_used",
+      params: [],
+      type_: Actionable,
+    ),
+  ])
+}

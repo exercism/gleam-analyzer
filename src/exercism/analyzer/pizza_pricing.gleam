@@ -8,6 +8,7 @@
 import glance.{Call, Expression, FieldAccess, Variable}
 import gleam/list
 import gleam/bool
+import gleam/option.{None, Option, Some}
 import exercism/analyzer/code.{Visitor}
 import exercism/analyzer/comment.{Actionable, Comment}
 
@@ -29,13 +30,13 @@ fn check_no_imports_are_used(module: glance.Module) -> List(Comment) {
 }
 
 type LengthCheckState {
-  LengthCheckState(used: Bool)
+  LengthCheckState(used: Bool, list_module_name: Option(String))
 }
 
 /// Checks that list.length is not used for the special cases of 1 or 2 pizzas in `order_price`.
 fn check_list_length_not_used(module: glance.Module) -> List(Comment) {
-  let state = LengthCheckState(used: False)
-  let state = list.fold(module.imports, state, check_list_length_not_imported)
+  let state = LengthCheckState(list_module_name: None, used: False)
+  let state = list.fold(module.imports, state, check_imports)
 
   use function <- require(code.get_function(module, "order_price"))
 
@@ -53,16 +54,25 @@ fn check_list_length_not_used(module: glance.Module) -> List(Comment) {
   }
 }
 
-fn check_list_length_not_imported(
+fn check_imports(
   state: LengthCheckState,
   import_: glance.Definition(glance.Import),
 ) -> LengthCheckState {
   let import_ = import_.definition
+
+  // If this import is not for the list module then it is not relevant, so
+  // return early.
   use <- bool.guard(import_.module != "gleam/list", state)
 
+  // Register the name under which the module has been imported
+  let name = option.or(import_.alias, Some("list"))
+  let state = LengthCheckState(..state, list_module_name: name)
+
+  // If we are importing the length function in an unqualified manner then
+  // register that it has been used.
   let is_list_length = fn(x: glance.UnqualifiedImport) { x.name == "length" }
   case list.any(import_.unqualified, is_list_length) {
-    True -> LengthCheckState(used: True)
+    True -> LengthCheckState(..state, used: True)
     False -> state
   }
 }
@@ -71,9 +81,10 @@ fn check_if_call_to_list_length(
   state: LengthCheckState,
   expression: Expression,
 ) -> LengthCheckState {
+  let imported_name = state.list_module_name
   case expression {
-    Call(function: FieldAccess(Variable("list"), "length"), ..) -> {
-      LengthCheckState(used: True)
+    Call(function: FieldAccess(Variable(module), "length"), ..) if Some(module) == imported_name -> {
+      LengthCheckState(..state, used: True)
     }
     _ -> state
   }
