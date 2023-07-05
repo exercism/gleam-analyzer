@@ -4,22 +4,47 @@ import glance.{
   Todo, Tuple, TupleIndex, Variable,
 }
 import gleam/list
-import gleam/option.{None, Some}
+import gleam/result
+import gleam/string
+import gleam/option.{None, Option, Some}
 
 pub fn get_function(
   module: glance.Module,
   desired_name: String,
-) -> Result(glance.Function, String) {
-  case module.functions {
-    [] -> Error("No functions found")
-    [glance.Definition(definition: function, ..), ..] -> {
-      case function.name == desired_name {
-        True -> Ok(function)
-        False -> get_function(module, desired_name)
-      }
-    }
-    [_, ..] -> get_function(module, desired_name)
-  }
+) -> Result(glance.Definition(glance.Function), Nil) {
+  module.functions
+  |> list.find(fn(function) { function.definition.name == desired_name })
+}
+
+pub fn get_import(
+  module: glance.Module,
+  desired_name: String,
+) -> Result(glance.Definition(glance.Import), Nil) {
+  module.imports
+  |> list.find(fn(import_) { import_.definition.module == desired_name })
+}
+
+pub fn import_alias(import_: glance.Import) -> String {
+  import_.alias
+  |> option.lazy_or(fn() {
+    import_.module
+    |> string.split("/")
+    |> list.last
+    |> option.from_result
+  })
+  |> option.unwrap(import_.module)
+}
+
+pub fn unqualified_name(
+  import_: glance.Import,
+  name: String,
+) -> Result(String, Nil) {
+  import_.unqualified
+  |> list.find(fn(item) { item.name == name })
+  |> result.map(fn(unqualified) {
+    unqualified.alias
+    |> option.unwrap(name)
+  })
 }
 
 pub type Visitor(state) {
@@ -149,5 +174,85 @@ fn fold_expression(
       let state = fold_expression(left, state, visitor)
       fold_expression(right, state, visitor)
     }
+  }
+}
+
+/// Checks if a function is imported and called.
+/// 
+/// TODO: FIXME: This can give a false positive if:
+/// - The function is imported in an unqualified fashiona and then shadowed by a
+///   variable which is then called.
+/// - There is a record assigned to the same name as the import and then a field
+///   on it with the same name as the function is accessed and called.
+/// 
+pub fn imported_function_called(
+  module module: glance.Module,
+  caller caller: String,
+  callee callee: #(String, String),
+) -> Bool {
+  use import_ <- require(get_import(module, callee.0), or: False)
+  use function <- require(get_function(module, caller), or: False)
+
+  let state =
+    ImportedFunctionCalledState(
+      unqualified: option.from_result(unqualified_name(
+        import_.definition,
+        callee.1,
+      )),
+      module: import_alias(import_.definition),
+      function: callee.1,
+      used: False,
+    )
+
+  let visitor =
+    Visitor(
+      visit_statement: fn(state, _statement) { state },
+      visit_expression: imported_function_used_visit_expression,
+    )
+
+  fold_statements(function.definition.body, state, visitor).used
+}
+
+fn require(
+  value: Result(t, e),
+  or fallback: out,
+  then next: fn(t) -> out,
+) -> out {
+  case value {
+    Ok(v) -> next(v)
+    Error(_) -> fallback
+  }
+}
+
+type ImportedFunctionCalledState {
+  ImportedFunctionCalledState(
+    used: Bool,
+    module: String,
+    function: String,
+    unqualified: Option(String),
+  )
+}
+
+fn imported_function_used_visit_expression(
+  state: ImportedFunctionCalledState,
+  expression: Expression,
+) -> ImportedFunctionCalledState {
+  let desired_module = state.module
+  let desired_function = state.function
+  let unqualified_name = state.unqualified
+
+  case expression {
+    Call(function: FieldAccess(Variable(module), function), ..) -> {
+      case module == desired_module && function == desired_function {
+        True -> ImportedFunctionCalledState(..state, used: True)
+        False -> state
+      }
+    }
+
+    Call(function: Variable(function), ..) if Some(function) == unqualified_name -> {
+      ImportedFunctionCalledState(..state, used: True)
+    }
+
+    _ -> state
   }
 }

@@ -38,3 +38,14 @@ fn comment_type_to_string(type_: CommentType) -> String {
     Celebratory -> "celebratory"
   }
 }
+
+pub fn add(
+  comments: List(Comment),
+  comment: Comment,
+  when condition: Bool,
+) -> List(Comment) {
+  case condition {
+    True -> [comment, ..comments]
+    False -> comments
+  }
+}
