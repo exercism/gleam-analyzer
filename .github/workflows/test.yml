@@ -11,8 +11,8 @@ jobs:
   test:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3.5.1
-      - uses: erlef/setup-beam@v1.15.4
+      - uses: actions/checkout@83b7061638ee4956cf7545a6f7efe594e5ad0247
+      - uses: erlef/setup-beam@c2e02f777c158310fc6d3d4e11b36a52d2d52db8
         with:
           otp-version: "25.2"
           gleam-version: "0.30.0-rc2"
